@@ -2,6 +2,9 @@
 set_time_limit(1000);
 date_default_timezone_set('America/Lima');
 
+require_once(ABSPATH . 'wp-admin' . '/includes/image.php');
+require_once(ABSPATH . 'wp-admin' . '/includes/file.php');
+require_once(ABSPATH . 'wp-admin' . '/includes/media.php');
 /*
   Plugin Name: Sync by La Motora
   Plugin URI:  https://bennyrock20.wordpress.com/
@@ -15,12 +18,13 @@ date_default_timezone_set('America/Lima');
   Domain Path: /languages
  */
 
-defined('ABSPATH') or die('No script kiddies please!');
+//defined('ABSPATH') or die('No script kiddies please!');
 
-define('sync_db_name', 'products');
-define('sync_db_user', 'user');
-define('sync_db_password', '123');
-define('sync_db_host', 'localhost');
+define('sync_db_name', 'megahier_e-commerce');
+define('sync_db_user', 'root');
+define('sync_db_password', '');
+define('sync_db_host', 'localhost'); 
+
 
 $remote_db = null;
 
@@ -47,19 +51,16 @@ function syncwarehouse_add_section($sections)
 
 /**
  * Add settings to the specific section we created before
- */
+**/
+
 add_filter('woocommerce_get_settings_products', 'syncwarehouse_all_settings', 10, 2);
 
 function syncwarehouse_all_settings($settings, $current_section)
 {
-    /**
-     * Check the current section is what we want
-     * */
+   
     if ($current_section == 'syncwarehouse') {
         $settings_syncwarehouse = array();
-// Add Title to the Settings
         $settings_syncwarehouse[] = array('name' => __('Settings', 'syncwarehouse'), 'type' => 'title', 'desc' => __('The following options are used to configure Sync', 'text-domain'), 'id' => 'syncwarehouse_id');
-// Add first checkbox option
         $settings_syncwarehouse[] = array(
             'name' => __('Activate Sync New Products', 'syncwarehouse'),
             'desc_tip' => __('Allow to run script to sync to warehouse', 'syncwarehouse'),
@@ -83,7 +84,6 @@ function syncwarehouse_all_settings($settings, $current_section)
             'desc_tip' => __('Hora en la que se ejecutará el proceso creación de nuevos productos', 'syncwarehouse'),
             'id' => 'syncwarehoused_time_hour_create',
             'type' => 'text',
-
             'css' => 'min-width:200px;',
             'min' => '1',
             'max' => '24',
@@ -207,6 +207,8 @@ function syncwarehouse_all_settings($settings, $current_section)
     }
 }
 
+
+
 add_action('syncwarehouse_create_new_product_event', 'syncwarehouse_create_new_product');
 add_action('syncwarehouse_update_stock_product_event', 'syncwarehouse_update_stock_products');
 
@@ -217,46 +219,49 @@ add_action('syncwarehouse_update_stock_product_event', 'syncwarehouse_update_sto
  */
 function syncwarehouse_create_new_product()
 {
+    syncwarehouse_write_log("starting syncwarehouse_create_new_product...");
 
-    syncwarehouse_write_log("running syncwarehouse_create_new_product...");
+    $remote_db = mysqli_connect(sync_db_host, sync_db_user, sync_db_password, sync_db_name);
 
-    $remote_db = new wpdb(sync_db_user, sync_db_password, sync_db_name, sync_db_host);
-    $arrayDataServer = getRemoteProducts($remote_db);
-    $total = count($arrayDataServer);
+    if (!$remote_db) {
+        syncwarehouse_write_log("Database error!");
+        return;
+    }
+   
+    $result = getRemoteProducts($remote_db);
+    $total = $result->num_rows;
+    $cont=1;
 
-    //$total= 10;
-    
-    syncwarehouse_write_log($total . " products to create!");
+    while ($product=mysqli_fetch_object($result)) {
 
-    for ($i = 0; $i < $total; $i++) {
-
-        syncwarehouse_write_log("Creating Product " . $i . " of " . $total);
-
-        $product = $arrayDataServer[$i];
-
-        $name = $product->pro_descripcion;
+        syncwarehouse_write_log("Creating Product ". $cont . "/" . $total );
+        $cont++;
+        
         $sku = $product->pro_codigo;
-        $description = $product->pro_descripcion;
-        $short_description = $product->pro_descripcion;
-
-        $marca = $product->pro_marca;
-        $unidad = $product->pro_unidad;
-
-        $slug = sanitize_title($name);
+        $name = $product->pro_desclarga;
+        $iva = $product->pro_iva; 
         $regular_price = floatval($product->pre_valor);
+        $description = $product->pro_desclarga;
+        $short_description = $product->pro_desclarga;        
+        $slug = sanitize_title($name);
+        
         $stock = 0;
         $weight = null;
         $length = null;
         $width = null;
         $height = null;
+        //default one because is not probided by the database yet 
+        $status = 1;
+        
+        //Categories 
         $categories = array(
             $product->cls_descripcion
         );
 
-        //time
+        //Get Categories id by Names
         $categories_ids = syncwarehouse_product_categories($categories);
 
-        $default_image_url = "http://domain.com/photos/" . $sku . ".jpg";
+        $default_image_url = "http://megahierro.com/products/" . $sku . ".jpg";
 
         $image_gallery_urls = array(
         );
@@ -265,46 +270,31 @@ function syncwarehouse_create_new_product()
             $product->pro_descripcion,
         );
 
-        //time
+        //Get Tags ids by Names
         //$tags_ids = syncwarehouse_product_tags($tags);
 
         $attributes = array();
-        $product_attributes = getProductAttributes($product->pro_codigo,$remote_db);
 
-        for ($f = 0; $f < count($product_attributes); $f++) {
+        $result2 = getProductAttributes($product->pro_codigo,$remote_db);
 
-            $product_attribute = $product_attributes[$f];
-            $value = $product_attribute->atr_valor;
-            $name = $product_attribute->atr_nombre;
 
+        while ($product_attribute =mysqli_fetch_object($result2)) {
+            syncwarehouse_write_log(json_encode($product_attribute));
+            $attribute_value = $product_attribute->atr_valor;
+            $attribute_name = $product_attribute->atr_nombre;
             $new_row = array(
-                $name => $value
+                'name'=>$attribute_name,
+                "value" => $attribute_value
             );
             array_push($attributes, $new_row );
         }
 
 
-        $status = 1;
-        $produt_status = "publish";
-
-        if ($status == 1) {
-            $produt_status = "publish";
-        } else {
-            $produt_status = "pending";
-        }
-
-        $stock_status = "outofstock";
-
-        if ($stock > 0) {
-            $stock_status = "instock";
-        } else {
-            $stock_status = "outofstock";
-        }
+        syncwarehouse_write_log("Attrbiutes ". json_encode($attributes) );
 
         $getters_and_setters = array(
             'name' => $name,
             'slug' => $slug,
-            'status' => 'publish',
             'catalog_visibility' => 'visible',
             'featured' => false,
             'description' => $description,
@@ -315,11 +305,11 @@ function syncwarehouse_create_new_product()
             //'date_on_sale_from' => '1475798400',
             //'date_on_sale_to' => '1477267200',
             //'total_sales' => 20,
-            'tax_status' => 'taxable',
-            'tax_class' => '',
+            'tax_status' => ( $iva == "S" ? "taxable" : "none" ),
+            'tax_class' => 'standard',
             'manage_stock' => true,
             'stock_quantity' => $stock,
-            'stock_status' => $stock_status,
+            'stock_status' => ( $stock > 0 ? "instock" : "outofstock" ),
             'backorders' => 'notify',
             'sold_individually' => false,
             'weight' => $weight,
@@ -339,18 +329,19 @@ function syncwarehouse_create_new_product()
             'category_ids' => $categories_ids,
             //'tag_ids' => $tags_ids,
             'attributes' => $attributes,
-            'status' => $produt_status
+            'status' => ($status = 1 ? "publish" : "pending")
 
         );
 
-        //syncwarehouse_write_log("getting Prices of  ". $sku);
+        //syncwarehouse_write_log("getting and setters  ". json_encode($getters_and_setters));
         //time
-        $results_prices = getPricesbyProductCode($sku, $remote_db);
+        
+       
         $price_array = array();
 
-        for ($y = 0; $y < count($results_prices); $y++) {
+        $results_prices = getPricesbyProductCode($sku, $remote_db);
 
-            $product_price = $results_prices[$y];
+        while ($product_price =mysqli_fetch_object($results_prices)){
             $price_value = floatval($product_price->pre_valor);
             $role_code = $product_price->pre_codigo;
 
@@ -367,18 +358,18 @@ function syncwarehouse_create_new_product()
                     $role = "distribuidores";
                     break;
             }
-
             if ($role != "" && $price_value > 0) {
                 $price_array[$role] = array(
                     "regular_price" => $price_value,
                     "selling_price" => "",
                 );
-
             }
-		    //syncwarehouse_write_log($price_array);
         }
         syncwarehouse_save_product($getters_and_setters, $price_array, $attributes, $default_image_url, $image_gallery_urls);
+       break;
     }
+
+    mysqli_close($remote_db);
 
     syncwarehouse_write_log("finished syncwarehouse_create_new_product...");
 }
@@ -445,9 +436,8 @@ function syncwarehouse_update_stock_products()
  **/
 function getRemoteProducts($remote_db)
 {
-    $results = $remote_db->get_results('SELECT * FROM `Producto` inner JOIN Clasificacion inner JOIN Precio on Producto.cls_codigo = Clasificacion.cls_codigo and Producto.pro_codigo = Precio.pro_codigo where Precio.pre_codigo= 1', OBJECT);
-    return $results;
-
+    return  mysqli_query($remote_db, 'SELECT * FROM `Producto` inner JOIN Clasificacion inner JOIN Precio on Producto.cls_codigo = Clasificacion.cls_codigo and Producto.pro_codigo = Precio.pro_codigo where Precio.pre_codigo= 1');
+    
 }
 
 /**
@@ -456,8 +446,7 @@ function getRemoteProducts($remote_db)
  */
 function getProductAttributes($product_id,$remote_db)
 {
-    $results = $remote_db->get_results("SELECT * FROM Atributo JOIN Atributo_Producto ON Atributo.atr_codigo= Atributo_Producto.atr_codigo where Atributo_Producto.pro_codigo= '" . $product_id . "'", OBJECT);
-    return $results;
+    return mysqli_query($remote_db, "SELECT * FROM Atributo JOIN Atributo_Producto ON Atributo.atr_codigo= Atributo_Producto.atr_codigo where Atributo_Producto.pro_codigo =" . $product_id);
 }
 
 /**
@@ -465,8 +454,7 @@ function getProductAttributes($product_id,$remote_db)
  **/
 function getPricesbyProductCode($remote_product_code, $remote_db)
 {
-    $results = $remote_db->get_results('SELECT * FROM `Precio` where Precio.pro_codigo=' . $remote_product_code, OBJECT);
-    return $results;
+    return  mysqli_query($remote_db, "SELECT * FROM `Precio` where Precio.pro_codigo=" . $remote_product_code);
 }
 
 /**
@@ -474,9 +462,7 @@ function getPricesbyProductCode($remote_product_code, $remote_db)
  **/
 function getProductsStockByStoreId($remote_store_id, $remote_db)
 {
-    $results = $remote_db->get_results("SELECT * FROM `Saldo_Producto` WHERE emp_codigo = '01'", OBJECT);
-    return $results;
-
+    return mysqli_query($remote_db, "SELECT * FROM `Saldo_Producto` WHERE emp_codigo =" . $remote_store_id);
 }
 
 /**
@@ -490,6 +476,7 @@ function syncwarehouse_save_product($getters_and_setters, $price_array, $attribu
 
         $product_id = wc_get_product_id_by_sku($getters_and_setters["sku"]);
         $product = new WC_Product();
+        
         if ($product_id) {
             $action = "updated";
             $product = new WC_Product($product_id);
@@ -527,18 +514,18 @@ function syncwarehouse_save_product($getters_and_setters, $price_array, $attribu
         //add term
         $atts = array();
 
-        foreach ($attributes as $name => $options) {
+        foreach ($attributes as $attribute) {
 
             //Get the taxonomy ID
-            $taxonomy_id = wc_attribute_taxonomy_id_by_name('pa_' . wc_sanitize_taxonomy_name($name));
+            $taxonomy_id = wc_attribute_taxonomy_id_by_name('pa_' . wc_sanitize_taxonomy_name($attribute["name"]));
 
             //Create the Product Attribute object
             $product_attribute = new WC_Product_Attribute();
             $product_attribute->set_id($taxonomy_id);
-            $product_attribute->set_name($name);
-            $product_attribute->set_options($options);
+            $product_attribute->set_name($attribute["name"]);
+            $product_attribute->set_options($attribute["value"]);
             $product_attribute->set_visible(true);
-            $atts['ds_' . wc_sanitize_taxonomy_name($name)] = $product_attribute;
+            $atts['ds_' . wc_sanitize_taxonomy_name($attribute["name"])] = $product_attribute;
         }
         $product->set_attributes($atts);
         //wp_set_object_terms( $product->get_id(), '3 Business Days', 'pa_brand' , false);
@@ -546,23 +533,23 @@ function syncwarehouse_save_product($getters_and_setters, $price_array, $attribu
         if (function_exists('wc_rbp_update_role_based_price')) {
             if (!empty($price_array)) {
                 wc_rbp_update_role_based_price($product->get_id(), $price_array);
-            //syncwarehouse_write_log($product->get_id()." Array Prices Updated!");
+                //syncwarehouse_write_log($product->get_id()." Array Prices Updated!");
             } else {
-            //syncwarehouse_write_log("Array prices es empty!");
+                syncwarehouse_write_log("Array prices es empty!");
             }
         } else {
-            //  syncwarehouse_write_log("Plugin Array Prices dont found!");
+            syncwarehouse_write_log("Plugin Array Prices dont found!");
         }
-        //syncwarehouse_write_log("Product: " .$product->get_name()." " .$action . " with status  " . $product->get_status() ."!");
+        syncwarehouse_write_log("Product: " .$product->get_name()." " .$action . " with status  " . $product->get_status() ."!");
         return true;
     } catch (WC_Data_Exception $e) {
-         //syncwarehouse_write_log($e);
+         syncwarehouse_write_log($e);
         return false;
 
     }
 }
 
-function syncwarehouse_get_attributes_in_line($name, $option)
+/*function syncwarehouse_get_attributes_in_line($name, $option)
 {
     $attributes = array();
     $attribute = new WC_Product_Attribute();
@@ -576,10 +563,10 @@ function syncwarehouse_get_attributes_in_line($name, $option)
 
 //attributes['test-attribute'] = $attribute;
     return $attribute;
-}
+}*/
 
 /**
- * Categories, crea una categoria, recibe un array strings con los nombres de las categorias
+ * Crea una categoria, recibe un array strings con los nombres de las categorias y devuelve un array de los ids de cada una de las categorias creadas
  * @since 3.0.0
  */
 function syncwarehouse_product_categories($categories)
@@ -592,7 +579,6 @@ function syncwarehouse_product_categories($categories)
         }
         $array_categories_id[] = $category_inserted['term_id'];
     }
-
     return $array_categories_id;
 }
 
@@ -613,31 +599,25 @@ function syncwarehouse_upload_images_by_url_and_return_id($image_url, $product_i
 
     $title = sanitize_title(preg_replace('/\\.[^.\\s]{3,4}$/', '', $title_));
 
-    //syncwarehouse_write_log("Url: " . $image_url);
-    //syncwarehouse_write_log("Image Name: " . $title);
+   
     $attachments = $wpdb->get_results("SELECT ID FROM $wpdb->posts WHERE post_title = '$title' AND post_type = 'attachment' ", OBJECT);
 
     if ($attachments) {
         //syncwarehouse_write_log("Image already exists with ID: " . $attachments[0]->ID);
         return $attachments[0]->ID;
     } else {
-
-        require_once(ABSPATH . 'wp-admin' . '/includes/image.php');
-        require_once(ABSPATH . 'wp-admin' . '/includes/file.php');
-        require_once(ABSPATH . 'wp-admin' . '/includes/media.php');
+    
         $image_id = media_sideload_image($image_url, $product_id, $title, 'src');
 
         if (is_wp_error($image_id)) {
-
-            //syncwarehouse_write_log("Error uploading image: " .   $image_url.  ' -> '. print_r($image_id->get_error_message(),true));
+            syncwarehouse_write_log("Error getting image from : " .   $image_url.  ' -> '. print_r($image_id->get_error_message(),true));
             return null;
         } else {
             if (isset($image_id[0])) {
-                //syncwarehouse_write_log("Image Id Inserted: " .  print_r($image_id[0],true));
+                syncwarehouse_write_log("Image Id Inserted: " .  print_r($image_id[0],true));
                 return $image_id[0];
             } else {
-
-                //syncwarehouse_write_log("Error uploading image #2: " . $image_url .  print_r($image_id,true));
+                syncwarehouse_write_log("Error uploading image #2: " . $image_url .  print_r($image_id,true));
                 return null;
             }
         }
@@ -692,38 +672,29 @@ function syncwarehouse_write_log($message)
 {
     $debug = get_option('syncwarehoused_debug');
     $store_name = get_bloginfo("name");
-
     $message = $store_name . " -> " . $message;
     if ($debug == "yes") {
-
-       //echo "<pre>";
-        //print_r( $message);
-        // echo "</pre>";
         write_log($message);
-
-
-
     }
 }
-
-/**
+/****
  Writes logs in worpdress log
  **/
-if (!function_exists('write_log')) {
-    function write_log($log)
-    {
+function write_log($log)
+{
         if (is_array($log) || is_object($log)) {
             error_log(print_r($log, true));
         } else {
             error_log($log);
         }
-    }
+      print_r($log);
 }
+
 function remote_id_admin_notice__success()
 {
     ?>
     <div class="notice notice-error is-dismissible">
-        <p><?php _e('Please insert the remote store id !', 'sample-text-domain'); ?></p>
+        <p><?php _e('Please insert the remote store id !', 'sync-text-domain'); ?></p>
     </div>
     <?php
 
@@ -732,7 +703,7 @@ function create_products_event_admin_notice__success()
 {
     ?>
     <div class="notice notice-success is-dismissible">
-        <p><?php _e('Create products cron schedule created!', 'sample-text-domain'); ?></p>
+        <p><?php _e('Create products cron schedule created!', 'sync-text-domain'); ?></p>
     </div>
     <?php
 
@@ -742,7 +713,7 @@ function remove_products_event_admin_notice__success()
 {
     ?>
     <div class="notice notice-success is-dismissible">
-        <p><?php _e('Create products cron schedule created!', 'sample-text-domain'); ?></p>
+        <p><?php _e('Create products cron schedule created!', 'sync-text-domain'); ?></p>
     </div>
     <?php
 
@@ -753,7 +724,7 @@ function create_update_products_stock_event_admin_notice__success()
 {
     ?>
     <div class="notice notice-success is-dismissible">
-        <p><?php _e('Create update stock cron schedule created!', 'sample-text-domain'); ?></p>
+        <p><?php _e('Create update stock cron schedule created!', 'sync-text-domain'); ?></p>
     </div>
     <?php
 
@@ -763,7 +734,7 @@ function remote_update_products_stock_event_admin_notice__success()
 {
     ?>
     <div class="notice notice-success is-dismissible">
-        <p><?php _e('Remove update stock cron schedule created!', 'sample-text-domain'); ?></p>
+        <p><?php _e('Remove update stock cron schedule created!', 'sync-text-domain'); ?></p>
     </div>
     <?php
 
@@ -773,7 +744,7 @@ function remote_update_products_hours_invalid__error($error = 'La hora de ejecuc
 {
     ?>
     <div class="notice notice-error">
-        <p><?php _e($error, 'sample-text-domain'); ?></p>
+        <p><?php _e($error, 'sync-text-domain'); ?></p>
     </div>
     <?php
 
