@@ -58,12 +58,52 @@ function syncwarehouse_all_settings($settings, $current_section)
         $settings_syncwarehouse = array();
         $settings_syncwarehouse[] = array('name' => __('Settings', 'syncwarehouse'), 'type' => 'title', 'desc' => __('The following options are used to configure Sync', 'text-domain'), 'id' => 'syncwarehouse_id');
         $settings_syncwarehouse[] = array(
-            'name' => __('Activate Sync New Products', 'syncwarehouse'),
+            'name' => __('Enable', 'syncwarehouse'),
             'desc_tip' => __('Allow to run script to sync to warehouse', 'syncwarehouse'),
             'id' => 'syncwarehouse_active',
             'type' => 'checkbox',
             'css' => 'min-width:300px;',
             'desc' => __('Enable Sync', 'syncwarehouse'),
+        );
+
+        $settings_syncwarehouse[] = array(
+            'name' => __('Sync Products', 'syncwarehouse'),
+            'desc_tip' => __('Allow to sync products', 'syncwarehouse'),
+            'id' => 'syncwarehouse_sync_products',
+            'type' => 'checkbox',
+            'css' => 'min-width:300px;',
+            'desc' => __('Enable Sync Products', 'syncwarehouse'),
+        );
+
+        $settings_syncwarehouse[] = array(
+            'name' => __('Update Existing Products', 'syncwarehouse'),
+            'desc_tip' => __('Update all products?', 'syncwarehouse'),
+            'id' => 'syncwarehoused_update_existing_products',
+            'type' => 'checkbox',
+            'css' => 'min-width:300px;',
+            'desc' => __(' Update Existing products', 'syncwarehouse'),
+        );
+
+
+        $settings_syncwarehouse[] = array(
+            'name' => __('Force to Update Images', 'syncwarehouse'),
+            'desc_tip' => __('Force update images even if the product already has an associated image?', 'syncwarehouse'),
+            'id' => 'syncwarehoused_update_images',
+            'type' => 'checkbox',
+            'css' => 'min-width:300px;',
+            'desc' => __('Always Update Images', 'syncwarehouse'),
+        );
+
+
+       
+
+        $settings_syncwarehouse[] = array(
+            'name' => __('Sync Stock Products', 'syncwarehouse'),
+            'desc_tip' => __('Allow to sync stocks', 'syncwarehouse'),
+            'id' => 'syncwarehouse_update_stock_products',
+            'type' => 'checkbox',
+            'css' => 'min-width:300px;',
+            'desc' => __('Enable Sync Stock', 'syncwarehouse'),
         );
 
         $settings_syncwarehouse[] = array(
@@ -74,15 +114,7 @@ function syncwarehouse_all_settings($settings, $current_section)
             'css' => 'min-width:300px;',
             'desc' => __('Enable Debug', 'syncwarehouse'),
         );
-        $settings_syncwarehouse[] = array(
-            'name' => __('Update Images', 'syncwarehouse'),
-            'desc_tip' => __('Force update images even if the product already has an associated image?', 'syncwarehouse'),
-            'id' => 'syncwarehoused_update_images',
-            'type' => 'checkbox',
-            'css' => 'min-width:300px;',
-            'desc' => __('Always Update Images', 'syncwarehouse'),
-        );
-
+      
         $settings_syncwarehouse[] = array(
             'name' => __('Hora creación de nuevos productos', 'syncwarehouse'),
             'desc_tip' => __('Hora en la que se ejecutará el proceso creación de nuevos productos', 'syncwarehouse'),
@@ -168,6 +200,7 @@ function syncwarehouse_all_settings($settings, $current_section)
         $sync = get_option('syncwarehouse_active');
         
         
+        
         $remote_store_id = intval(get_option('syncwarehouse_remote_store_id'));
         $time_hours_create = date_parse(get_option('syncwarehoused_time_hour_create'));
         $time_hours_update = date_parse(get_option('syncwarehoused_time_hour_update'));
@@ -235,26 +268,17 @@ function syncwarehouse_all_settings($settings, $current_section)
             if (!wp_next_scheduled('syncwarehouse_create_new_product_event')) {
                 $current_date->setTime($hours_create, $minutes_create);
                 $timestamp = $current_date->getTimestamp();
-                //echo $current_date->format('Y-m-d H:i:s');
                 syncwarehouse_write_log("wp_schedule_event -> syncwarehouse_create_new_product_event created! " . $hours_create . ":" . $minutes_create . " " . $timestamp);
-                $args=array(
-                    'uniqid'=>$remote_store_id
-                );
-                wp_schedule_event($timestamp, 'daily', 'syncwarehouse_create_new_product_event',$args);
+                wp_schedule_event($timestamp, 'daily', 'syncwarehouse_create_new_product_event');
                 add_action('admin_notices', 'create_products_event_admin_notice__success');
             }
 
             //adding schedule update stock products
-
             if (!wp_next_scheduled('syncwarehouse_update_stock_product_event')) {
                 $current_date->setTime($hours_update, $minutes_update);
                 $timestamp = $current_date->getTimestamp();
-                //echo $current_date->format('Y-m-d H:i:s');
                 syncwarehouse_write_log("wp_schedule_event -> syncwarehouse_update_stock_product_event created! " . $hours_update . ":" . $minutes_update . " " . $timestamp);
-                $args=array(
-                    'uniqid'=>$remote_store_id
-                );
-                wp_schedule_event($timestamp, 'every_eight_hours', 'syncwarehouse_update_stock_product_event',$args);
+                wp_schedule_event($timestamp, 'every_eight_hours', 'syncwarehouse_update_stock_product_event');
                 add_action('admin_notices', 'create_update_products_stock_event_admin_notice__success');
             }
         } else {
@@ -263,11 +287,7 @@ function syncwarehouse_all_settings($settings, $current_section)
 
             if (wp_next_scheduled('syncwarehouse_create_new_product_event')) {
                 syncwarehouse_write_log("wp_schedule_event -> syncwarehouse_create_new_product_event removed!");
-                $args=array(
-                    'uniqid'=>$remote_store_id
-                );
-
-                wp_clear_scheduled_hook('syncwarehouse_create_new_product_event',$args);
+                wp_clear_scheduled_hook('syncwarehouse_create_new_product_event');
                 add_action('admin_notices', 'remove_products_event_admin_notice__success');
             }
 
@@ -275,10 +295,7 @@ function syncwarehouse_all_settings($settings, $current_section)
 
             if (wp_next_scheduled('syncwarehouse_update_stock_product_event')) {
                 syncwarehouse_write_log("wp_schedule_event -> syncwarehouse_update_stock_product_event removed!");
-                $args=array(
-                    'uniqid'=>$remote_store_id
-                );
-                wp_clear_scheduled_hook('syncwarehouse_update_stock_product_event',$args);
+                wp_clear_scheduled_hook('syncwarehouse_update_stock_product_event');
                 add_action('admin_notices', 'remote_update_products_stock_event_admin_notice__success');
             }
         }
@@ -301,163 +318,162 @@ add_action('syncwarehouse_update_stock_product_event', 'syncwarehouse_update_sto
  */
 function syncwarehouse_create_new_product()
 {
-    syncwarehouse_write_log("starting syncwarehouse_create_new_product...");
+    
+    if(get_option('syncwarehouse_sync_products') =="yes"){
+    
+        syncwarehouse_write_log("starting syncwarehouse_create_new_product...");
 
-    $remote_db = mysqli_connect(get_option('syncwarehouse_sync_db_host'), get_option('syncwarehouse_sync_db_user'), get_option('syncwarehouse_sync_db_password'), get_option('syncwarehouse_sync_db_name'));
+        $remote_db = mysqli_connect(get_option('syncwarehouse_sync_db_host'), get_option('syncwarehouse_sync_db_user'), get_option('syncwarehouse_sync_db_password'), get_option('syncwarehouse_sync_db_name'));
 
-    if (!$remote_db) {
-        syncwarehouse_write_log("Database error!");
-        return;
-    }
-   
-    $result = getRemoteProducts($remote_db);
-    $total = $result->num_rows;
-    $cont=1;
+        if (!$remote_db) {
+            syncwarehouse_write_log("Database error!");
+            return;
+        }
+    
+        $result = getRemoteProducts($remote_db);
+        $total = $result->num_rows;
+        $cont=1;
 
-    while ($product=mysqli_fetch_object($result)) {
+        while ($product=mysqli_fetch_object($result)) {
 
-        syncwarehouse_write_log("Creating Product ". $cont . "/" . $total );
-        
-        $cont++;
-        
-        $sku = $product->pro_codigo;
-        $name = $product->pro_desclarga;
-        $iva = $product->pro_iva; 
-        $regular_price = floatval($product->pre_valor);
-        $description = $product->pro_desclarga;
-        $short_description = $product->pro_desclarga;        
-        $slug = sanitize_title($name);
-        
-        $stock = 0;
-        $weight = $product->pro_pesokg;
-        $length = null;
-        $width = null;
-        $height = null;
-        //default one because is not probided by the database yet 
-        $status = 1;
-        
-        //Categories 
-        $categories = array(
-            $product->cls_descripcion
-        );
-
-        //Get Categories id by Names
-        $categories_ids = syncwarehouse_product_categories($categories);
-
-        $default_image_url = $sync = get_option('syncwarehouse_sync_url_products') ."/". $sku . ".jpg";
-
-        $image_gallery_urls = array(
-        );
-
-        $tags = array(
-            $product->pro_descripcion,
-        );
-
-        //Get Tags ids by Names
-        //$tags_ids = syncwarehouse_product_tags($tags);
-
-        $attributes = array();
-
-        $result2 = getProductAttributes($product->pro_codigo,$remote_db);
-
-
-        while ($product_attribute =mysqli_fetch_object($result2)) {
-            //syncwarehouse_write_log(json_encode($product_attribute));
-            $attribute_value = array($product_attribute->atr_valor);
-            $attribute_name = $product_attribute->atr_nombre;
-            $new_row = array(
-                'name'=>$attribute_name,
-                "value" => $attribute_value
+            syncwarehouse_write_log("Creating Product ". $cont . "/" . $total );
+            
+            $cont++;
+            
+            $sku = $product->pro_codigo;
+            $name = $product->pro_desclarga;
+            $iva = $product->pro_iva; 
+            $regular_price = floatval($product->pre_valor);
+            $description = $product->pro_desclarga;
+            $short_description = $product->pro_desclarga;        
+            $slug = sanitize_title($name);
+            
+            $stock = 0;
+            $weight = $product->pro_pesokg;
+            $length = null;
+            $width = null;
+            $height = null;
+            //default one because is not probided by the database yet 
+            $status = 1;
+            
+            //Categories 
+            $categories = array(
+                $product->cls_descripcion
             );
-            array_push($attributes, $new_row );
-        }
+
+            //Get Categories id by Names
+            $categories_ids = syncwarehouse_product_categories($categories);
+
+            $default_image_url = $sync = get_option('syncwarehouse_sync_url_products') ."/". $sku . ".jpg";
+
+            $image_gallery_urls = array(
+            );
+
+            $tags = array(
+                $product->pro_descripcion,
+            );
+
+            //Get Tags ids by Names
+            //$tags_ids = syncwarehouse_product_tags($tags);
+
+            $attributes = array();
+
+            $result2 = getProductAttributes($product->pro_codigo,$remote_db);
 
 
-        //syncwarehouse_write_log("Attrbiutes ". json_encode($attributes) );
-
-        $getters_and_setters = array(
-            'name' => $name,
-            'slug' => $slug,
-            'catalog_visibility' => 'visible',
-            'featured' => false,
-            'description' => $description,
-            'short_description' => $short_description,
-            'sku' => $sku,
-            'regular_price' => $regular_price,
-            //'sale_price' => $sale_price,
-            //'date_on_sale_from' => '1475798400',
-            //'date_on_sale_to' => '1477267200',
-            //'total_sales' => 20,
-            'tax_status' => ( $iva == "S" ? "taxable" : "none" ),
-            'tax_class' => 'standard',
-            'manage_stock' => true,
-            'stock_quantity' => $stock,
-            'stock_status' => ( $stock > 0 ? "instock" : "outofstock" ),
-            'backorders' => 'notify',
-            'sold_individually' => false,
-            'weight' => $weight,
-            'length' => $length,
-            'width' => $width,
-            'height' => $height,
-            //'upsell_ids' => array(2, 3),
-            //'cross_sell_ids' => array(4, 5),
-            'parent_id' => 0,
-            'reviews_allowed' => true,
-            'default_attributes' => array(),
-            //'purchase_note' => 'A note',
-            //'menu_order' => 2,
-            //'gallery_image_ids' => array(),
-            //'download_expiry' => -1,
-            //'download_limit' => 5,
-            'category_ids' => $categories_ids,
-            //'tag_ids' => $tags_ids,
-            'attributes' => $attributes,
-            'status' => ($status = 1 ? "publish" : "pending")
-
-        );
-
-        //syncwarehouse_write_log("getting and setters  ". json_encode($getters_and_setters));
-        //time
-        
-       
-        $price_array = array();
-
-        $results_prices = getPricesbyProductCode($sku, $remote_db);
-
-        while ($product_price =mysqli_fetch_object($results_prices)){
-            $price_value = floatval($product_price->pre_valor);
-            $role_code = $product_price->pre_codigo;
-
-            $role = "";
-
-            switch ($role_code) {
-                case 1:
-                    $role = "";
-                    break;
-                case 2:
-                    $role = "mayoristas";
-                    break;
-                case 9:
-                    $role = "distribuidores";
-                    break;
-            }
-            if ($role != "" && $price_value > 0) {
-                $price_array[$role] = array(
-                    "regular_price" => $price_value,
-                    "selling_price" => "",
+            while ($product_attribute =mysqli_fetch_object($result2)) {
+                //syncwarehouse_write_log(json_encode($product_attribute));
+                $attribute_value = array($product_attribute->atr_valor);
+                $attribute_name = $product_attribute->atr_nombre;
+                $new_row = array(
+                    'name'=>$attribute_name,
+                    "value" => $attribute_value
                 );
+                array_push($attributes, $new_row );
+            }
+
+            $getters_and_setters = array(
+                'name' => $name,
+                'slug' => $slug,
+                'catalog_visibility' => 'visible',
+                'featured' => false,
+                'description' => $description,
+                'short_description' => $short_description,
+                'sku' => $sku,
+                'regular_price' => $regular_price,
+                //'sale_price' => $sale_price,
+                //'date_on_sale_from' => '1475798400',
+                //'date_on_sale_to' => '1477267200',
+                //'total_sales' => 20,
+                'tax_status' => ( $iva == "S" ? "taxable" : "none" ),
+                'tax_class' => 'standard',
+                'manage_stock' => true,
+                'stock_quantity' => $stock,
+                'stock_status' => ( $stock > 0 ? "instock" : "outofstock" ),
+                'backorders' => 'no', //yes, no, notify
+                'sold_individually' => false,
+                'weight' => $weight,
+                'length' => $length,
+                'width' => $width,
+                'height' => $height,
+                //'upsell_ids' => array(2, 3),
+                //'cross_sell_ids' => array(4, 5),
+                'parent_id' => 0,
+                'reviews_allowed' => true,
+                'default_attributes' => array(),
+                //'purchase_note' => 'A note',
+                //'menu_order' => 2,
+                //'gallery_image_ids' => array(),
+                //'download_expiry' => -1,
+                //'download_limit' => 5,
+                'category_ids' => $categories_ids,
+                //'tag_ids' => $tags_ids,
+                'attributes' => $attributes,
+                'status' => ($status = 1 ? "publish" : "pending")
+
+            );
+            
+            $price_array = array();
+
+            $results_prices = getPricesbyProductCode($sku, $remote_db);
+
+            while ($product_price =mysqli_fetch_object($results_prices)){
+                $price_value = floatval($product_price->pre_valor);
+                $role_code = $product_price->pre_codigo;
+
+                $role = "";
+
+                switch ($role_code) {
+                    case 1:
+                        $role = "";
+                        break;
+                    case 2:
+                        $role = "mayoristas";
+                        break;
+                    case 9:
+                        $role = "distribuidores";
+                        break;
+                }
+                if ($role != "" && $price_value > 0) {
+                    $price_array[$role] = array(
+                        "regular_price" => $price_value,
+                        "selling_price" => "",
+                    );
+                }
+            }
+            syncwarehouse_save_product($getters_and_setters, $price_array, $attributes, $default_image_url, $image_gallery_urls);
+        
+            if($cont > 100 ){
+                //break;
             }
         }
-        syncwarehouse_save_product($getters_and_setters, $price_array, $attributes, $default_image_url, $image_gallery_urls);
-      
-       if($cont > 100 ){
-            //break;
-       }
+
+        mysqli_close($remote_db);
+
+        syncwarehouse_write_log("finished syncwarehouse_create_new_product...");
+    }else{
+        syncwarehouse_write_log("syncwarehouse_sync_new_products is not enabled...");
     }
-
-    mysqli_close($remote_db);
-
-    syncwarehouse_write_log("finished syncwarehouse_create_new_product...");
 }
 
 
@@ -466,55 +482,67 @@ function syncwarehouse_create_new_product()
  */
 function syncwarehouse_update_stock_products()
 {
-    syncwarehouse_write_log("running syncwarehouse_update_stock_products...");
-    $remote_store_id = get_option('syncwarehouse_remote_store_id');
+    if(get_option('syncwarehouse_update_stock_products') =="yes"){
+        syncwarehouse_write_log("running syncwarehouse_update_stock_products...");
+        $remote_store_id = get_option('syncwarehouse_remote_store_id');
 
-    if (!empty($remote_store_id)) {
+        if (!empty($remote_store_id)) {
 
-        $remote_db = new wpdb(sync_db_user, sync_db_password, sync_db_name, sync_db_host);
-        $array_products_stock = getProductsStockByStoreId($remote_store_id, $remote_db);
-        $total = count($array_products_stock);
+            $remote_db = mysqli_connect(get_option('syncwarehouse_sync_db_host'), get_option('syncwarehouse_sync_db_user'), get_option('syncwarehouse_sync_db_password'), get_option('syncwarehouse_sync_db_name'));
 
-        syncwarehouse_write_log($total . " products to update stocks!");
+            $result = getProductsStockByStoreId($remote_store_id, $remote_db);
+            $total = $result->num_rows;
+            $cont=1;
 
-        for ($i = 0; $i < $total; $i++) {
+            syncwarehouse_write_log($total . " products to update stocks!");
 
-            syncwarehouse_write_log("Updating Product ". $i ." of ".$total);
+            while ($product_stock=mysqli_fetch_object($result)) {
 
-            $product_stock = $array_products_stock[$i];
-            $stock = intval($product_stock->slp_actual);
-            $sku = $product_stock->pro_codigo;
-            $product_id = wc_get_product_id_by_sku($sku);
-            $product = new WC_Product();
+                syncwarehouse_write_log("Updating Product ". $cont++ ." of ".$total);
+                
+                $stock = intval($product_stock->slp_actual);
+                $sku = $product_stock->pro_codigo;
+                $product_id = wc_get_product_id_by_sku($sku);
+                $product = new WC_Product();
 
-            if ($product_id) {
-                $action = "updated";
-                $product = new WC_Product($product_id);
-                $stock_status = "outofstock";
-
-                if ($stock > 0) {
-                    $stock_status = "instock";
-                } else {
+                if ($product_id) {
+                    $product = new WC_Product($product_id);
                     $stock_status = "outofstock";
+                    if ($stock > 0) {
+                        $stock_status = "instock";
+                    } else {
+                        $stock_status = "outofstock";
+                    }
+
+                    if ($product->get_stock_quantity() != $stock) {
+                        wc_update_product_stock($product, $stock, 'set');
+                        $product->set_stock_status($stock_status);
+                        $product->save();
+                        wc_recount_after_stock_change($product->get_id());
+                        syncwarehouse_write_log("Product stock with sku ". $sku ." updated to ". $stock ." items!...");
+                    }else{
+                        syncwarehouse_write_log("Local product ". $sku ." stock is equal to remote stock ". $product->get_stock_quantity() ." == ". $stock ."");
+    
+                    }
+                } else {
+                    syncwarehouse_write_log("Error updating product, product with sku ". $sku ." not found!...");
+                    continue;
                 }
 
-                if ($product->get_stock_quantity() != $stock) {
-                    wc_update_product_stock($product, $stock, 'set');
-                    $product->set_stock_status($stock_status);
-                    $product->save();
-                    wc_recount_after_stock_change($product->get_id());
-                    syncwarehouse_write_log("Product stock with sku ". $sku ." updated to ". $stock ." items!...");
+                if($cont > 100){
+                    //break;
                 }
-            } else {
-                syncwarehouse_write_log("Error updating product, product with sku ". $sku ." not found!...");
-                continue;
             }
-        }
+            
+            mysqli_close($remote_db);
 
-    } else {
-        syncwarehouse_write_log("Error, Remote Store Id is empty!");
+        } else {
+            syncwarehouse_write_log("Error, Remote Store Id is empty!");
+        }
+        syncwarehouse_write_log("finished syncwarehouse_update_stock_products...");
+    }else{
+        syncwarehouse_write_log("syncwarehouse_update_stock_products is not enabled...");
     }
-    syncwarehouse_write_log("finished syncwarehouse_update_stock_products...");
 }
 
 /**
@@ -564,8 +592,13 @@ function syncwarehouse_save_product($getters_and_setters, $price_array, $attribu
         $product = new WC_Product();
         
         if ($product_id) {
-            $action = "updated";
-            $product = new WC_Product($product_id);
+            if(get_option('syncwarehoused_update_existing_products') == "no"){
+                syncwarehouse_write_log("The product already exists and you dont select to update existing products");
+                return false;
+            }else{
+                $action = "updated";
+                $product = new WC_Product($product_id);
+            }
         } else {
             $action = "created";
         }
