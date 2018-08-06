@@ -18,12 +18,8 @@ require_once(ABSPATH . 'wp-admin' . '/includes/media.php');
   Domain Path: /languages
  */
 
-//defined('ABSPATH') or die('No script kiddies please!');
+defined('ABSPATH') or die('No script kiddies please!');
 
-define('sync_db_name', 'megahier_e-commerce');
-define('sync_db_user', 'root');
-define('sync_db_password', '');
-define('sync_db_host', 'localhost'); 
 
 
 $remote_db = null;
@@ -78,6 +74,14 @@ function syncwarehouse_all_settings($settings, $current_section)
             'css' => 'min-width:300px;',
             'desc' => __('Enable Debug', 'syncwarehouse'),
         );
+        $settings_syncwarehouse[] = array(
+            'name' => __('Update Images', 'syncwarehouse'),
+            'desc_tip' => __('Force update images even if the product already has an associated image?', 'syncwarehouse'),
+            'id' => 'syncwarehoused_update_images',
+            'type' => 'checkbox',
+            'css' => 'min-width:300px;',
+            'desc' => __('Always Update Images', 'syncwarehouse'),
+        );
 
         $settings_syncwarehouse[] = array(
             'name' => __('Hora creación de nuevos productos', 'syncwarehouse'),
@@ -95,7 +99,6 @@ function syncwarehouse_all_settings($settings, $current_section)
             'desc_tip' => __('Hora en la que se ejecutará el proceso de Actualización', 'syncwarehouse'),
             'id' => 'syncwarehoused_time_hour_update',
             'type' => 'text',
-
             'css' => 'min-width:200px;',
             'min' => '1',
             'max' => '24',
@@ -111,9 +114,60 @@ function syncwarehouse_all_settings($settings, $current_section)
             'desc' => __('Remote Store Id', 'syncwarehouse'),
         );
 
+
+        $settings_syncwarehouse[] = array(
+            'name' => __('Database Name', 'syncwarehouse'),
+            'desc_tip' => __('Insert de database name', 'syncwarehouse'),
+            'id' => 'syncwarehouse_sync_db_name',
+            'type' => 'text',
+            'css' => 'min-width:300px;',
+            'desc' => __('External database', 'syncwarehouse'),
+        );
+
+
+        $settings_syncwarehouse[] = array(
+            'name' => __('Database User', 'syncwarehouse'),
+            'desc_tip' => __('Insert de database user', 'syncwarehouse'),
+            'id' => 'syncwarehouse_sync_db_user',
+            'type' => 'text',
+            'css' => 'min-width:300px;',
+            'desc' => __('External database', 'syncwarehouse'),
+        );
+
+        $settings_syncwarehouse[] = array(
+            'name' => __('Database Password', 'syncwarehouse'),
+            'desc_tip' => __('Insert de database password', 'syncwarehouse'),
+            'id' => 'syncwarehouse_sync_db_password',
+            'type' => 'password',
+            'css' => 'min-width:300px;',
+            'desc' => __('External database', 'syncwarehouse'),
+        );
+
+        $settings_syncwarehouse[] = array(
+            'name' => __('Database Host', 'syncwarehouse'),
+            'desc_tip' => __('Insert de database host', 'syncwarehouse'),
+            'id' => 'syncwarehouse_sync_db_host',
+            'type' => 'text',
+            'css' => 'min-width:300px;',
+            'desc' => __('External database', 'syncwarehouse'),
+        );
+
+        $settings_syncwarehouse[] = array(
+            'name' => __('Url Image Products', 'syncwarehouse'),
+            'desc_tip' => __('Insert de url of images', 'syncwarehouse'),
+            'id' => 'syncwarehouse_sync_url_products',
+            'type' => 'text',
+            'css' => 'min-width:300px;',
+            'desc' => __('Like https://domain.com/products', 'syncwarehouse'),
+        );
+        
+
+
         $settings_syncwarehouse[] = array('type' => 'sectionend', 'id' => 'syncwarehouse');
 
         $sync = get_option('syncwarehouse_active');
+        
+        
         $remote_store_id = intval(get_option('syncwarehouse_remote_store_id'));
         $time_hours_create = date_parse(get_option('syncwarehoused_time_hour_create'));
         $time_hours_update = date_parse(get_option('syncwarehoused_time_hour_update'));
@@ -121,6 +175,34 @@ function syncwarehouse_all_settings($settings, $current_section)
         $minutes_create = 0;
         $hours_update = 0;
         $minutes_update = 0;
+
+        $syncwarehouse_sync_db_name = get_option('syncwarehouse_sync_db_name');
+
+        if (empty($syncwarehouse_sync_db_name)) {
+            external_database_info_admin_notice__success();
+            add_action('admin_notices', 'external_database_info_admin_notice__success');
+            return $settings_syncwarehouse;
+        }
+        $syncwarehouse_sync_db_user = get_option('syncwarehouse_sync_db_user');
+        
+        if (empty($syncwarehouse_sync_db_user)) {
+            external_database_info_admin_notice__success();
+            add_action('admin_notices', 'external_database_info_admin_notice__success');
+            return $settings_syncwarehouse;
+        }
+
+        $syncwarehouse_sync_db_password = get_option('syncwarehouse_sync_db_password');
+
+       
+
+        $syncwarehouse_sync_db_host = get_option('syncwarehouse_sync_db_host');
+
+        if (empty($syncwarehouse_sync_db_host)) {
+            external_database_info_admin_notice__success();
+            add_action('admin_notices', 'external_database_info_admin_notice__success');
+            return $settings_syncwarehouse;
+        }
+
 
         if ($time_hours_create["error_count"]) {
             remote_update_products_hours_invalid__error($time_hours_create["errors"][0]);
@@ -221,7 +303,7 @@ function syncwarehouse_create_new_product()
 {
     syncwarehouse_write_log("starting syncwarehouse_create_new_product...");
 
-    $remote_db = mysqli_connect(sync_db_host, sync_db_user, sync_db_password, sync_db_name);
+    $remote_db = mysqli_connect(get_option('syncwarehouse_sync_db_host'), get_option('syncwarehouse_sync_db_user'), get_option('syncwarehouse_sync_db_password'), get_option('syncwarehouse_sync_db_name'));
 
     if (!$remote_db) {
         syncwarehouse_write_log("Database error!");
@@ -235,6 +317,7 @@ function syncwarehouse_create_new_product()
     while ($product=mysqli_fetch_object($result)) {
 
         syncwarehouse_write_log("Creating Product ". $cont . "/" . $total );
+        
         $cont++;
         
         $sku = $product->pro_codigo;
@@ -246,7 +329,7 @@ function syncwarehouse_create_new_product()
         $slug = sanitize_title($name);
         
         $stock = 0;
-        $weight = null;
+        $weight = $product->pro_pesokg;
         $length = null;
         $width = null;
         $height = null;
@@ -261,7 +344,7 @@ function syncwarehouse_create_new_product()
         //Get Categories id by Names
         $categories_ids = syncwarehouse_product_categories($categories);
 
-        $default_image_url = "http://megahierro.com/products/" . $sku . ".jpg";
+        $default_image_url = $sync = get_option('syncwarehouse_sync_url_products') ."/". $sku . ".jpg";
 
         $image_gallery_urls = array(
         );
@@ -279,8 +362,8 @@ function syncwarehouse_create_new_product()
 
 
         while ($product_attribute =mysqli_fetch_object($result2)) {
-            syncwarehouse_write_log(json_encode($product_attribute));
-            $attribute_value = $product_attribute->atr_valor;
+            //syncwarehouse_write_log(json_encode($product_attribute));
+            $attribute_value = array($product_attribute->atr_valor);
             $attribute_name = $product_attribute->atr_nombre;
             $new_row = array(
                 'name'=>$attribute_name,
@@ -290,7 +373,7 @@ function syncwarehouse_create_new_product()
         }
 
 
-        syncwarehouse_write_log("Attrbiutes ". json_encode($attributes) );
+        //syncwarehouse_write_log("Attrbiutes ". json_encode($attributes) );
 
         $getters_and_setters = array(
             'name' => $name,
@@ -366,7 +449,10 @@ function syncwarehouse_create_new_product()
             }
         }
         syncwarehouse_save_product($getters_and_setters, $price_array, $attributes, $default_image_url, $image_gallery_urls);
-       break;
+      
+       if($cont > 100 ){
+            //break;
+       }
     }
 
     mysqli_close($remote_db);
@@ -417,10 +503,10 @@ function syncwarehouse_update_stock_products()
                     $product->set_stock_status($stock_status);
                     $product->save();
                     wc_recount_after_stock_change($product->get_id());
-                    //syncwarehouse_write_log("Product stock with sku ". $sku ." updated to ". $stock ." items!...");
+                    syncwarehouse_write_log("Product stock with sku ". $sku ." updated to ". $stock ." items!...");
                 }
             } else {
-                //syncwarehouse_write_log("Error updating product, product with sku ". $sku ." not found!...");
+                syncwarehouse_write_log("Error updating product, product with sku ". $sku ." not found!...");
                 continue;
             }
         }
@@ -489,9 +575,21 @@ function syncwarehouse_save_product($getters_and_setters, $price_array, $attribu
         //upload images product default
 
         if ($default_image_url != "") {
-            $image_id = syncwarehouse_upload_images_by_url_and_return_id($default_image_url, $product->get_id());
-            if ($image_id > 0) {
-                $product->set_image_id($image_id);
+            $allowed = false;
+
+            if(empty($product->get_image_id())){
+                $allowed = true;
+            }else if (get_option('syncwarehoused_update_images') == "yes" ){
+                $allowed = true;
+            }
+
+            if($allowed == true){
+                $image_id = syncwarehouse_upload_images_by_url_and_return_id($default_image_url, $product->get_id());
+                if ($image_id > 0) {
+                    $product->set_image_id($image_id);
+                }
+            }else{
+                syncwarehouse_write_log("The product already has an image and is not forced");
             }
         }
 
@@ -603,7 +701,7 @@ function syncwarehouse_upload_images_by_url_and_return_id($image_url, $product_i
     $attachments = $wpdb->get_results("SELECT ID FROM $wpdb->posts WHERE post_title = '$title' AND post_type = 'attachment' ", OBJECT);
 
     if ($attachments) {
-        //syncwarehouse_write_log("Image already exists with ID: " . $attachments[0]->ID);
+        syncwarehouse_write_log("Image already exists with ID: " . $attachments[0]->ID);
         return $attachments[0]->ID;
     } else {
     
@@ -614,7 +712,7 @@ function syncwarehouse_upload_images_by_url_and_return_id($image_url, $product_i
             return null;
         } else {
             if (isset($image_id[0])) {
-                syncwarehouse_write_log("Image Id Inserted: " .  print_r($image_id[0],true));
+                syncwarehouse_write_log("Image Id Inserted: " .  print_r($image_id,true));
                 return $image_id[0];
             } else {
                 syncwarehouse_write_log("Error uploading image #2: " . $image_url .  print_r($image_id,true));
@@ -687,7 +785,6 @@ function write_log($log)
         } else {
             error_log($log);
         }
-      print_r($log);
 }
 
 function remote_id_admin_notice__success()
@@ -699,6 +796,17 @@ function remote_id_admin_notice__success()
     <?php
 
 }
+
+function external_database_info_admin_notice__success()
+{
+    ?>
+    <div class="notice notice-error is-dismissible">
+        <p><?php _e('Please insert the external database info!', 'sync-text-domain'); ?></p>
+    </div>
+    <?php
+
+}
+
 function create_products_event_admin_notice__success()
 {
     ?>
