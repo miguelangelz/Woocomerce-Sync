@@ -804,8 +804,16 @@ function syncwarehouse_write_log($message)
     $debug = get_option('syncwarehoused_debug');
     $store_name = get_bloginfo("name");
     $message = $store_name . " -> " . $message;
+
+
+
     if ($debug == "yes") {
         write_log($message);
+        
+        $file_path= dirname(__FILE__) ."/logs/sync_".date("m_d_Y").".log";
+        $myfile = fopen($file_path, "a") or die("Unable to open file!");
+        fwrite($myfile, print_r($message, true) . "\n");
+        fclose($myfile);
     }
 }
 /****
@@ -813,12 +821,14 @@ function syncwarehouse_write_log($message)
  **/
 if (!function_exists('write_log')) {
     function write_log($log)
-    {
+    {      
             if (is_array($log) || is_object($log)) {
                 error_log(print_r($log, true));
             } else {
                 error_log($log);
             }
+
+           
     }
 } 
 
