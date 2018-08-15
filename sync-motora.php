@@ -63,7 +63,7 @@ function syncwarehouse_all_settings($settings, $current_section)
             'id' => 'syncwarehouse_active',
             'type' => 'checkbox',
             'css' => 'min-width:300px;',
-            'desc' => __('Enable Sync', 'syncwarehouse'),
+            'desc' => __('Enable Plugin', 'syncwarehouse'),
         );
 
         $settings_syncwarehouse[] = array(
@@ -77,7 +77,7 @@ function syncwarehouse_all_settings($settings, $current_section)
 
         $settings_syncwarehouse[] = array(
             'name' => __('Update Existing Products', 'syncwarehouse'),
-            'desc_tip' => __('Update all products?', 'syncwarehouse'),
+            'desc_tip' => __('This take considerable time and server resources', 'syncwarehouse'),
             'id' => 'syncwarehoused_update_existing_products',
             'type' => 'checkbox',
             'css' => 'min-width:300px;',
@@ -416,8 +416,7 @@ function syncwarehouse_create_new_product()
                 'category_ids' => $categories_ids,
                 //'tag_ids' => $tags_ids,
                 'attributes' => $attributes,
-                'status' => ($status == "OK" ? "publish" : "pending")
-
+                'status' => $status 
             );
             
             $price_array = array();
@@ -449,7 +448,7 @@ function syncwarehouse_create_new_product()
                 }
             }
             syncwarehouse_save_product($getters_and_setters, $price_array, $attributes, $default_image_url, $image_gallery_urls);
-            if($cont > 50){
+            if($cont > 100){
                 //break;
             }
         }
@@ -494,27 +493,33 @@ function syncwarehouse_update_stock_products()
                 $product = new WC_Product();
 
                 if ($product_id) {
+                    
                     $product = new WC_Product($product_id);
+                    
                     $stock_status = "outofstock";
+                    
                     if ($stock > 0) {
                         $stock_status = "instock";
                     } else {
                         $stock_status = "outofstock";
                     }
 
-                    if ($product->get_stock_quantity() != $stock) {
+                    if ($product->get_stock_quantity() != $stock || $product->get_stock_status() != $stock_status) {
                         wc_update_product_stock($product, $stock, 'set');
                         $product->set_stock_status($stock_status);
                         $product->save();
                         wc_recount_after_stock_change($product->get_id());
-                        syncwarehouse_write_log("Product stock with sku ". $sku ." updated to ". $stock ." items!...");
+                        syncwarehouse_write_log("Product stock  with sku ". $sku ." updated to ". $stock ." items!...".$product->get_stock_status());
                     }else{
                         syncwarehouse_write_log("Local product ". $sku ." stock is equal to remote stock ". $product->get_stock_quantity() ." == ". $stock ."");
-    
                     }
                 } else {
                     syncwarehouse_write_log("Error updating product, product with sku ". $sku ." not found!...");
                     continue;
+                }
+
+                if($cont > 10){
+                    //break;
                 }
             }
             
@@ -577,8 +582,17 @@ function syncwarehouse_save_product($getters_and_setters, $price_array, $attribu
         
         if ($product_id) {
             if(get_option('syncwarehoused_update_existing_products') == "no"){
-                syncwarehouse_write_log("The product already exists and you dont select to update existing products");
-                return false;
+                if($getters_and_setters["status"] != $product->get_status()){
+                    syncwarehouse_write_log("The product need to be updated because it change of status");
+                    $product = new WC_Product($product_id);
+                    $product->set_status($getters_and_setters["status"]);
+                    $product->save();
+                    return false;
+                }else{
+                    syncwarehouse_write_log("The product already exists and you dont select to update existing products");
+                    return false;
+                }
+               
             }else{
                 $action = "updated";
                 $product = new WC_Product($product_id);
@@ -632,23 +646,30 @@ function syncwarehouse_save_product($getters_and_setters, $price_array, $attribu
         foreach ($attributes as $attribute) {
 
             //Get the taxonomy ID
-            $taxonomy_id = wc_attribute_taxonomy_id_by_name('pa_' . wc_sanitize_taxonomy_name($attribute["name"]));
+            $name = $attribute["name"];
+            $options= $attribute["value"];
+            $sanitize_name = wc_sanitize_taxonomy_name($name);
+            $taxonomy_id = wc_attribute_taxonomy_id_by_name('pa_' . $sanitize_name );
 
+           // syncwarehouse_write_log($getters_and_setters["sku"]. " product_attribute is array: ". json_encode($options));
             //Create the Product Attribute object
             $product_attribute = new WC_Product_Attribute();
             $product_attribute->set_id($taxonomy_id);
-            $product_attribute->set_name($attribute["name"]);
-            $product_attribute->set_options($attribute["value"]);
+            $product_attribute->set_name($name);
+            $product_attribute->set_options($options);
             $product_attribute->set_visible(true);
-            $atts['ds_' . wc_sanitize_taxonomy_name($attribute["name"])] = $product_attribute;
+           // syncwarehouse_write_log("product_attribute: ".print_r($product_attribute,true));
+            $atts['ds_' . $sanitize_name] = $product_attribute;
+
         }
+        //syncwarehouse_write_log("Attributtes: ".print_r($atts,true));
         $product->set_attributes($atts);
         //wp_set_object_terms( $product->get_id(), '3 Business Days', 'pa_brand' , false);
         $product->save();
         if (function_exists('wc_rbp_update_role_based_price')) {
             if (!empty($price_array)) {
                 wc_rbp_update_role_based_price($product->get_id(), $price_array);
-                //syncwarehouse_write_log($product->get_id()." Array Prices Updated!");
+                syncwarehouse_write_log($product->get_id()." Array Prices Updated!");
             } else {
                 syncwarehouse_write_log("Array prices es empty!");
             }
