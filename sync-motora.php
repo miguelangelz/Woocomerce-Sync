@@ -347,42 +347,29 @@ function syncwarehouse_create_new_product()
             $description = $product->pro_desclarga;
             $short_description = $product->pro_desclarga;        
             $slug = sanitize_title($name);
-            
             $stock = 0;
             $weight = $product->pro_pesokg;
             $length = null;
             $width = null;
             $height = null;
-            //default one because is not probided by the database yet 
-            $status = 1;
-            
-            //Categories 
+            $status = $product->pro_estado == "OK" ? "publish" : "pending" ;
             $categories = array(
                 $product->cls_descripcion
             );
-
             //Get Categories id by Names
             $categories_ids = syncwarehouse_product_categories($categories);
-
             $default_image_url = $sync = get_option('syncwarehouse_sync_url_products') ."/". $sku . ".jpg";
-
             $image_gallery_urls = array(
             );
-
             $tags = array(
                 $product->pro_descripcion,
             );
-
             //Get Tags ids by Names
             //$tags_ids = syncwarehouse_product_tags($tags);
 
             $attributes = array();
-
             $result2 = getProductAttributes($product->pro_codigo,$remote_db);
-
-
             while ($product_attribute =mysqli_fetch_object($result2)) {
-                //syncwarehouse_write_log(json_encode($product_attribute));
                 $attribute_value = array($product_attribute->atr_valor);
                 $attribute_name = $product_attribute->atr_nombre;
                 $new_row = array(
@@ -429,7 +416,7 @@ function syncwarehouse_create_new_product()
                 'category_ids' => $categories_ids,
                 //'tag_ids' => $tags_ids,
                 'attributes' => $attributes,
-                'status' => ($status = 1 ? "publish" : "pending")
+                'status' => ($status == "OK" ? "publish" : "pending")
 
             );
             
@@ -462,8 +449,7 @@ function syncwarehouse_create_new_product()
                 }
             }
             syncwarehouse_save_product($getters_and_setters, $price_array, $attributes, $default_image_url, $image_gallery_urls);
-        
-            if($cont > 100 ){
+            if($cont > 50){
                 //break;
             }
         }
@@ -474,6 +460,8 @@ function syncwarehouse_create_new_product()
     }else{
         syncwarehouse_write_log("syncwarehouse_sync_new_products is not enabled...");
     }
+
+    
 }
 
 
@@ -527,10 +515,6 @@ function syncwarehouse_update_stock_products()
                 } else {
                     syncwarehouse_write_log("Error updating product, product with sku ". $sku ." not found!...");
                     continue;
-                }
-
-                if($cont > 100){
-                    //break;
                 }
             }
             
@@ -730,7 +714,6 @@ function syncwarehouse_upload_images_by_url_and_return_id($image_url, $product_i
 
     $title = sanitize_title(preg_replace('/\\.[^.\\s]{3,4}$/', '', $title_));
 
-   
     $attachments = $wpdb->get_results("SELECT ID FROM $wpdb->posts WHERE post_title = '$title' AND post_type = 'attachment' ", OBJECT);
 
     if ($attachments) {
@@ -805,11 +788,8 @@ function syncwarehouse_write_log($message)
     $store_name = get_bloginfo("name");
     $message = $store_name . " -> " . $message;
 
-
-
     if ($debug == "yes") {
         write_log($message);
-        
         $file_path= dirname(__FILE__) ."/logs/sync_".date("m_d_Y").".log";
         $myfile = fopen($file_path, "a") or die("Unable to open file!");
         fwrite($myfile, print_r($message, true) . "\n");
