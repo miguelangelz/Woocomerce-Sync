@@ -395,8 +395,8 @@ function syncwarehouse_create_new_product()
                 'tax_status' => ( $iva == "S" ? "taxable" : "none" ),
                 'tax_class' => 'standard',
                 'manage_stock' => true,
-                'stock_quantity' => $stock,
-                'stock_status' => ( $stock > 0 ? "instock" : "outofstock" ),
+                //'stock_quantity' => $stock,
+                //'stock_status' => ( $stock > 0 ? "instock" : "outofstock" ),
                 'backorders' => 'no', //yes, no, notify
                 'sold_individually' => false,
                 'weight' => $weight,
@@ -448,7 +448,7 @@ function syncwarehouse_create_new_product()
                 }
             }
             syncwarehouse_save_product($getters_and_setters, $price_array, $attributes, $default_image_url, $image_gallery_urls);
-            if($cont > 100){
+            if($cont > 20){
                 //break;
             }
         }
@@ -670,6 +670,10 @@ function syncwarehouse_save_product($getters_and_setters, $price_array, $attribu
             if (!empty($price_array)) {
                 wc_rbp_update_role_based_price($product->get_id(), $price_array);
                 syncwarehouse_write_log($product->get_id()." Array Prices Updated!");
+                if (!wc_rbp_product_status($product->get_id())){
+                    syncwarehouse_write_log($product->get_id()."Activating prices role based!");
+                    add_post_meta($product->get_id(), '_enable_role_based_price', true,true); 
+                }
             } else {
                 syncwarehouse_write_log("Array prices es empty!");
             }
