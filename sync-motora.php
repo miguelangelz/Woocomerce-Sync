@@ -741,11 +741,14 @@ function syncwarehouse_upload_images_by_url_and_return_id($image_url, $product_i
 
     $attachments = $wpdb->get_results("SELECT ID FROM $wpdb->posts WHERE post_title = '$title' AND post_type = 'attachment' ", OBJECT);
 
-    if ($attachments) {
+    if ($attachments && get_option('syncwarehoused_update_images') == 'no') {
         syncwarehouse_write_log("Image already exists with ID: " . $attachments[0]->ID);
         return $attachments[0]->ID;
     } else {
-    
+        if($attachments){
+          wp_delete_attachment( $attachments[0]->ID, true );
+        }
+
         $image_id = media_sideload_image($image_url, $product_id, $title, 'src');
 
         if (is_wp_error($image_id)) {
